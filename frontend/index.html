@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S.</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00d4ff;
+            --blue: #00ffff;
+            --orange: #ff6b00;
+            --bg-dark: #00000f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background: var(--bg-dark);
+            color: var(--cyan);
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px),
+                linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: perspective(500px) rotateX(60deg);
+            transform-origin: top;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.1) 2px,
+                rgba(0,0,0,0.1) 4px
+            );
+            pointer-events: none;
+            z-index: 1000;
+            animation: scanlines 0.1s linear infinite;
+            opacity: 0.3;
+        }
+
+        @keyframes scanlines {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 4px; }
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 0.5em;
+            text-shadow: 
+                0 0 10px var(--cyan),
+                0 0 20px var(--cyan),
+                0 0 40px var(--cyan),
+                0 0 80px var(--blue);
+            margin-bottom: 2rem;
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes titleGlow {
+            from {
+                text-shadow: 
+                    0 0 10px var(--cyan),
+                    0 0 20px var(--cyan),
+                    0 0 40px var(--cyan);
+            }
+            to {
+                text-shadow: 
+                    0 0 15px var(--cyan),
+                    0 0 30px var(--cyan),
+                    0 0 60px var(--cyan),
+                    0 0 100px var(--blue);
+            }
+        }
+
+        #reactor-container {
+            width: 400px;
+            height: 400px;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        #reactor-container:hover {
+            transform: scale(1.05);
+        }
+
+        #reactor-container:active {
+            transform: scale(0.95);
+        }
+
+        .status {
+            font-size: 1.2rem;
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            border: 2px solid var(--cyan);
+            border-radius: 5px;
+            background: rgba(0, 212, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            transition: all 0.3s ease;
+        }
+
+        .status.listening {
+            border-color: #00ff00;
+            color: #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .status.processing {
+            border-color: var(--orange);
+            color: var(--orange);
+            box-shadow: 0 0 20px rgba(255, 107, 0, 0.3);
+            animation: pulse 0.5s ease-in-out infinite;
+        }
+
+        .status.speaking {
+            border-color: var(--cyan);
+            color: var(--cyan);
+            animation: pulse 0.2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Transcript */
+        .transcript {
+            margin-top: 1.5rem;
+            width: 600px;
+            max-width: 90vw;
+            max-height: 160px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 0 4px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,212,255,0.3) transparent;
+        }
+
+        .transcript::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .transcript::-webkit-scrollbar-thumb {
+            background: rgba(0,212,255,0.3);
+            border-radius: 2px;
+        }
+
+        .transcript-line {
+            font-size: 0.85rem;
+            opacity: 0.5;
+            text-align: left;
+            line-height: 1.4;
+            transition: opacity 0.3s ease;
+        }
+
+        .transcript-line.user {
+            color: #00ff88;
+        }
+
+        .transcript-line.jarvis {
+            color: var(--cyan);
+        }
+
+        .transcript-line.latest {
+            opacity: 1;
+        }
+
+        /* Cursor typewriter */
+        .typewriter-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: var(--cyan);
+            margin-left: 2px;
+            vertical-align: middle;
+            animation: blink 0.7s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .hud {
+            position: fixed;
+            font-size: 0.7rem;
+            color: rgba(0, 212, 255, 0.5);
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 0.1em;
+        }
+
+        .hud-top-left {
+            top: 20px;
+            left: 20px;
+        }
+
+        .hud-top-right {
+            top: 20px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .hud-bottom-left {
+            bottom: 20px;
+            left: 20px;
+        }
+
+        .hud-bottom-right {
+            bottom: 20px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .hud-line {
+            margin: 5px 0;
+            opacity: 0.6;
+        }
+
+        .browser-warning {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid red;
+            padding: 1rem 2rem;
+            border-radius: 5px;
+            color: #ff4444;
+            z-index: 2000;
+            text-align: center;
+        }
+
+        .browser-warning.show {
+            display: block;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2rem;
+                letter-spacing: 0.3em;
+            }
+            
+            #reactor-container {
+                width: 280px;
+                height: 280px;
+            }
+
+            .transcript {
+                width: 90vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="browser-warning" id="browserWarning">
+        ⚠️ Web Speech API solo funciona en Chrome/Edge. Por favor usa un navegador basado en Chromium.
+    </div>
+
+    <div class="hud hud-top-left">
+        <div class="hud-line">SYSTEM: ONLINE</div>
+        <div class="hud-line">AUDIO: ACTIVE</div>
+        <div class="hud-line" id="hudMode">MODE: STANDBY</div>
+    </div>
+
+    <div class="hud hud-top-right">
+        <div class="hud-line" id="timeDisplay">--:--:--</div>
+        <div class="hud-line">NET: CONNECTED</div>
+        <div class="hud-line">MEM: 64%</div>
+    </div>
+
+    <div class="hud hud-bottom-left">
+        <div class="hud-line">SESS: ACTIVE</div>
+        <div class="hud-line">LANG: ES-PE</div>
+    </div>
+
+    <div class="hud hud-bottom-right">
+        <div class="hud-line">V: 1.0.0</div>
+        <div class="hud-line">BUILD: DEV</div>
+    </div>
+
+    <div class="container">
+        <h1>J.A.R.V.I.S.</h1>
+        <div id="reactor-container"></div>
+        <div class="status" id="status">EN ESPERA</div>
+        <div class="transcript" id="transcript"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="js/reactor.js"></script>
+    <script src="js/speech.js"></script>
+    <script src="js/socket.js"></script>
+    
+    <script>
+        const BACKEND_URL = '__BACKEND_WS_URL__';
+        
+        const statusEl = document.getElementById('status');
+        const transcriptEl = document.getElementById('transcript');
+        const container = document.getElementById('reactor-container');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const hudMode = document.getElementById('hudMode');
+        
+        let callActive = false;
+        let isListening = false;
+        let isProcessing = false;
+        let isSpeaking = false;
+        let jarvisSocket = null;
+        let speechRecognizer = null;
+        let reactor = null;
+
+        // Typewriter state
+        let typewriterTimeout = null;
+        let currentJarvisLine = null;
+
+        function updateTime() {
+            const now = new Date();
+            timeDisplay.textContent = now.toLocaleTimeString('en-US', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        function setStatus(status) {
+            statusEl.className = 'status ' + status;
+            
+            switch(status) {
+                case 'listening':
+                    statusEl.textContent = 'ESCUCHANDO';
+                    hudMode.textContent = 'MODE: CALL: ACTIVE';
+                    break;
+                case 'processing':
+                    statusEl.textContent = 'PROCESANDO';
+                    hudMode.textContent = 'MODE: CALL: ACTIVE';
+                    break;
+                case 'speaking':
+                    statusEl.textContent = 'TRANSMITIENDO';
+                    hudMode.textContent = 'MODE: CALL: ACTIVE';
+                    break;
+                default:
+                    statusEl.textContent = 'EN ESPERA';
+                    hudMode.textContent = 'MODE: STANDBY';
+            }
+            
+            if (reactor) {
+                reactor.setState(status === 'idle' ? 'idle' : status);
+            }
+        }
+
+        // Dimmer todas las líneas anteriores
+        function dimOldLines() {
+            const lines = transcriptEl.querySelectorAll('.transcript-line');
+            lines.forEach(line => line.classList.remove('latest'));
+        }
+
+        // Agrega línea del usuario (sin typewriter)
+        function addUserLine(text) {
+            dimOldLines();
+            const line = document.createElement('div');
+            line.className = 'transcript-line user latest';
+            line.textContent = 'TÚ: ' + text;
+            transcriptEl.appendChild(line);
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        }
+
+        // Inicia nueva línea de JARVIS con typewriter
+        function startJarvisLine(text) {
+            // Si hay una línea en progreso, terminarla inmediatamente
+            if (typewriterTimeout) {
+                clearTimeout(typewriterTimeout);
+                typewriterTimeout = null;
+            }
+            if (currentJarvisLine) {
+                // Remover cursor de línea anterior
+                const cursor = currentJarvisLine.querySelector('.typewriter-cursor');
+                if (cursor) cursor.remove();
+                currentJarvisLine = null;
+            }
+
+            dimOldLines();
+            const line = document.createElement('div');
+            line.className = 'transcript-line jarvis latest';
+            transcriptEl.appendChild(line);
+            currentJarvisLine = line;
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+            typewriterAnimate(line, 'JARVIS: ' + text, 0);
+        }
+
+        function typewriterAnimate(line, fullText, index) {
+            if (index <= fullText.length) {
+                // Remover cursor anterior si existe
+                const cursor = line.querySelector('.typewriter-cursor');
+                if (cursor) cursor.remove();
+
+                line.textContent = fullText.substring(0, index);
+
+                // Agregar cursor parpadeante
+                const cursorEl = document.createElement('span');
+                cursorEl.className = 'typewriter-cursor';
+                line.appendChild(cursorEl);
+
+                transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+                typewriterTimeout = setTimeout(() => {
+                    typewriterAnimate(line, fullText, index + 1);
+                }, 22);
+            } else {
+                // Terminó — remover cursor
+                const cursor = line.querySelector('.typewriter-cursor');
+                if (cursor) cursor.remove();
+                typewriterTimeout = null;
+                currentJarvisLine = null;
+            }
+        }
+
+        function checkBrowserSupport() {
+            const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+            if (!isChrome) {
+                document.getElementById('browserWarning').classList.add('show');
+            }
+        }
+
+        function init() {
+            checkBrowserSupport();
+            
+            reactor = new ArcReactor(container);
+            window.reactor = reactor;
+
+            speechRecognizer = new SpeechRecognizer(
+                (text) => {
+                    addUserLine(text);
+                    isListening = false;
+                    isProcessing = true;
+                    setStatus('processing');
+                    speechRecognizer.stop();
+                    
+                    if (jarvisSocket && jarvisSocket.isOpen()) {
+                        jarvisSocket.send(text);
+                    }
+                },
+                () => {
+                    isListening = true;
+                    setStatus('listening');
+                },
+                () => {
+                    if (isListening) {
+                        isListening = false;
+                        if (!isProcessing && !isSpeaking) {
+                            setStatus('idle');
+                        }
+                    }
+                },
+                (error) => {
+                    console.error('Speech error:', error);
+                    isListening = false;
+                    if (!isProcessing && !isSpeaking) {
+                        setStatus('idle');
+                    }
+                }
+            );
+
+            jarvisSocket = new JarvisSocket(
+                BACKEND_URL,
+                null,
+                (text) => {
+                    startJarvisLine(text);
+                },
+                () => {
+                    isProcessing = false;
+                    isSpeaking = false;
+                    if (callActive) {
+                        setStatus('listening');
+                        setTimeout(() => { if (callActive) speechRecognizer.startContinuous(); }, 800);
+                    } else {
+                        setStatus('idle');
+                    }
+                },
+                () => {
+                    isSpeaking = false;
+                    if (callActive) {
+                        setStatus('listening');
+                        setTimeout(() => { if (callActive) speechRecognizer.startContinuous(); }, 800);
+                    } else if (!isProcessing) {
+                        setStatus('idle');
+                    }
+                },
+                () => {
+                    console.log('Connected to JARVIS backend');
+                },
+                () => {
+                    console.log('Disconnected from JARVIS backend');
+                }
+            );
+
+            jarvisSocket.onSpeakingStart = () => {
+                isSpeaking = true;
+                speechRecognizer.stop();
+                setStatus('speaking');
+            };
+
+            container.addEventListener('click', handleOrbClick);
+            container.addEventListener('touchend', handleOrbClick);
+        }
+
+        function handleOrbClick(e) {
+            e.preventDefault();
+            
+            if (!callActive) {
+                startCall();
+            } else {
+                endCall();
+            }
+        }
+
+        function startCall() {
+            if (!speechRecognizer.isAvailable()) {
+                alert('Navegador no soportado. Usa Chrome.');
+                return;
+            }
+
+            callActive = true;
+            transcriptEl.innerHTML = '';
+            speechRecognizer.startContinuous();
+            setStatus('listening');
+        }
+
+        function endCall() {
+            callActive = false;
+            
+            if (speechRecognizer) {
+                speechRecognizer.stop();
+            }
+            
+            if (jarvisSocket) {
+                jarvisSocket.stopAudio();
+            }
+            
+            isListening = false;
+            isProcessing = false;
+            isSpeaking = false;
+            setStatus('idle');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

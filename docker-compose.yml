@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - JARVIS_WEBHOOK_URL=${JARVIS_WEBHOOK_URL:-https://n8n-production-1704.up.railway.app/webhook/n8n}
+      - JARVIS_API_KEY=${JARVIS_API_KEY:-Y29va3N0cmlwbmV3c3NhbWVuYXRpb25pbmRpdmlkdWFsd29uc3R1ZGllZGtleWZpbmU=}
+      - TTS_QUALITY=low
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    environment:
+      - BACKEND_WS_URL=ws://host.docker.internal:8000/ws
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: jarvis-network
