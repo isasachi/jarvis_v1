@@ -33,16 +33,19 @@ class TTSService:
         print("Modelo cargado OK")
 
         print("Calentando modelo...")
-        for frase in [
+        frases_warmup = [
             "Inicializando sistemas de síntesis de voz.",
-            "Todos los sistemas operando con normalidad."
-        ]:
+            "Todos los sistemas operando con normalidad.",
+            "JARVIS en línea y listo para operar.",  # ← añadir una 3ra pasada
+        ]
+        for frase in frases_warmup:
             wav_buffer = io.BytesIO()
             with wave.open(wav_buffer, 'wb') as wav_file:
                 wav_file.setnchannels(1)
                 wav_file.setsampwidth(2)
                 wav_file.setframerate(22050)
                 self.voice.synthesize_wav(frase, wav_file)
+            _ = wav_buffer.getvalue()  # ← forzar flush del buffer
         print("Modelo listo")
 
     async def synthesize(self, text: str) -> bytes:

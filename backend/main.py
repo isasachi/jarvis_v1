@@ -3,12 +3,19 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
+from contextlib import asynccontextmanager
 
 from services.tts_service import TTSService
 from services.llm_service import LLMService
 from services.sentence_splitter import split_sentences
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Se ejecuta antes de recibir cualquier petición
+    await tts_service.initialize()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

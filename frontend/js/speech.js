@@ -60,21 +60,26 @@ class SpeechRecognizer {
 
         this.recognition.onend = () => {
             if (this.isContinuous && this.isSupported) {
-                // No reiniciar si JARVIS está hablando
-                if (window.jarvisSocket && window.jarvisSocket.isPlaying) {
+                // ← NUEVO: también chequear isCoolingDown
+                if (window.jarvisSocket && 
+                    (window.jarvisSocket.isPlaying || window.jarvisSocket.isCoolingDown)) {
+                    // Esperar a que el cooldown termine antes de reintentar
+                    setTimeout(() => {
+                        if (this.isContinuous && 
+                            !window.jarvisSocket?.isPlaying && 
+                            !window.jarvisSocket?.isCoolingDown) {
+                            try { this.recognition.start(); } catch(e) {}
+                        }
+                    }, 600);
                     return;
                 }
                 try {
                     this.recognition.start();
                 } catch (e) {
-                    if (this.onEnd) {
-                        this.onEnd();
-                    }
+                    if (this.onEnd) this.onEnd();
                 }
             } else {
-                if (this.onEnd) {
-                    this.onEnd();
-                }
+                if (this.onEnd) this.onEnd();
             }
         };
 

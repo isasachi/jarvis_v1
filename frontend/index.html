@@ -350,15 +350,14 @@
 
         // Typewriter state
         let typewriterTimeout = null;
-        let currentJarvisLine = null;
+        let typewriterQueue = [];
+        let isTyping = false;
+        const MAX_LINES = 5; // máximo de líneas visibles
 
         function updateTime() {
             const now = new Date();
             timeDisplay.textContent = now.toLocaleTimeString('en-US', { 
-                hour12: false,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
         }
         setInterval(updateTime, 1000);
@@ -366,7 +365,6 @@
 
         function setStatus(status) {
             statusEl.className = 'status ' + status;
-            
             switch(status) {
                 case 'listening':
                     statusEl.textContent = 'ESCUCHANDO';
@@ -384,76 +382,83 @@
                     statusEl.textContent = 'EN ESPERA';
                     hudMode.textContent = 'MODE: STANDBY';
             }
-            
             if (reactor) {
                 reactor.setState(status === 'idle' ? 'idle' : status);
             }
         }
 
-        // Dimmer todas las líneas anteriores
         function dimOldLines() {
             const lines = transcriptEl.querySelectorAll('.transcript-line');
             lines.forEach(line => line.classList.remove('latest'));
         }
 
-        // Agrega línea del usuario (sin typewriter)
+        function trimTranscript() {
+            const lines = transcriptEl.querySelectorAll('.transcript-line');
+            if (lines.length > MAX_LINES) {
+                const toRemove = lines.length - MAX_LINES;
+                for (let i = 0; i < toRemove; i++) {
+                    const old = lines[i];
+                    old.style.transition = 'opacity 0.4s ease, max-height 0.4s ease';
+                    old.style.opacity = '0';
+                    old.style.maxHeight = old.offsetHeight + 'px';
+                    setTimeout(() => {
+                        old.style.maxHeight = '0';
+                        old.style.marginBottom = '0';
+                        old.style.overflow = 'hidden';
+                    }, 50);
+                    setTimeout(() => old.remove(), 450);
+                }
+            }
+        }
+
+        function enqueueLine(text, cssClass, speed) {
+            typewriterQueue.push({ text, cssClass, speed });
+            if (!isTyping) processTypewriterQueue();
+        }
+
         function addUserLine(text) {
-            dimOldLines();
-            const line = document.createElement('div');
-            line.className = 'transcript-line user latest';
-            line.textContent = 'TÚ: ' + text;
-            transcriptEl.appendChild(line);
-            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+            enqueueLine('TÚ: ' + text, 'user', 12);
         }
 
-        // Inicia nueva línea de JARVIS con typewriter
         function startJarvisLine(text) {
-            // Si hay una línea en progreso, terminarla inmediatamente
-            if (typewriterTimeout) {
-                clearTimeout(typewriterTimeout);
-                typewriterTimeout = null;
+            enqueueLine('JARVIS: ' + text, 'jarvis', 22);
+        }
+
+        function processTypewriterQueue() {
+            if (typewriterQueue.length === 0) {
+                isTyping = false;
+                return;
             }
-            if (currentJarvisLine) {
-                // Remover cursor de línea anterior
-                const cursor = currentJarvisLine.querySelector('.typewriter-cursor');
-                if (cursor) cursor.remove();
-                currentJarvisLine = null;
-            }
+            isTyping = true;
+            const { text, cssClass, speed } = typewriterQueue.shift();
 
             dimOldLines();
             const line = document.createElement('div');
-            line.className = 'transcript-line jarvis latest';
+            line.className = `transcript-line ${cssClass} latest`;
             transcriptEl.appendChild(line);
-            currentJarvisLine = line;
+            trimTranscript();
             transcriptEl.scrollTop = transcriptEl.scrollHeight;
 
-            typewriterAnimate(line, 'JARVIS: ' + text, 0);
+            typewriterAnimate(line, text, 0, speed);
         }
 
-        function typewriterAnimate(line, fullText, index) {
+        function typewriterAnimate(line, fullText, index, speed) {
             if (index <= fullText.length) {
-                // Remover cursor anterior si existe
                 const cursor = line.querySelector('.typewriter-cursor');
                 if (cursor) cursor.remove();
-
                 line.textContent = fullText.substring(0, index);
-
-                // Agregar cursor parpadeante
                 const cursorEl = document.createElement('span');
                 cursorEl.className = 'typewriter-cursor';
                 line.appendChild(cursorEl);
-
                 transcriptEl.scrollTop = transcriptEl.scrollHeight;
-
                 typewriterTimeout = setTimeout(() => {
-                    typewriterAnimate(line, fullText, index + 1);
-                }, 22);
+                    typewriterAnimate(line, fullText, index + 1, speed);
+                }, speed);
             } else {
-                // Terminó — remover cursor
                 const cursor = line.querySelector('.typewriter-cursor');
                 if (cursor) cursor.remove();
                 typewriterTimeout = null;
-                currentJarvisLine = null;
+                processTypewriterQueue();
             }
         }
 
@@ -511,20 +516,14 @@
                 },
                 () => {
                     isProcessing = false;
+                },
+                () => {
                     isSpeaking = false;
+                    isProcessing = false;
                     if (callActive) {
                         setStatus('listening');
                         setTimeout(() => { if (callActive) speechRecognizer.startContinuous(); }, 800);
                     } else {
-                        setStatus('idle');
-                    }
-                },
-                () => {
-                    isSpeaking = false;
-                    if (callActive) {
-                        setStatus('listening');
-                        setTimeout(() => { if (callActive) speechRecognizer.startContinuous(); }, 800);
-                    } else if (!isProcessing) {
                         setStatus('idle');
                     }
                 },
@@ -561,8 +560,10 @@
                 alert('Navegador no soportado. Usa Chrome.');
                 return;
             }
-
             callActive = true;
+            typewriterQueue = [];
+            isTyping = false;
+            if (typewriterTimeout) { clearTimeout(typewriterTimeout); typewriterTimeout = null; }
             transcriptEl.innerHTML = '';
             speechRecognizer.startContinuous();
             setStatus('listening');

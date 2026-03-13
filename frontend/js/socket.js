@@ -103,7 +103,7 @@ class JarvisSocket {
             }
             setTimeout(() => {
                 this.isCoolingDown = false;
-            }, 1200);
+            }, 2000);
             return;
         }
 
