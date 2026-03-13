@@ -61,7 +61,6 @@ class JarvisSocket {
 
     initAudioContext() {
         if (this.audioContext) return;
-        
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         this.analyser = this.audioContext.createAnalyser();
         this.analyser.fftSize = 256;
@@ -98,44 +97,45 @@ class JarvisSocket {
         if (this.audioQueue.length === 0) {
             this.isPlaying = false;
             this.isCoolingDown = true;
-            if (this.onIdle) {
-                this.onIdle();
-            }
-            setTimeout(() => {
-                this.isCoolingDown = false;
-            }, 2000);
+            if (this.onIdle) this.onIdle();
+            setTimeout(() => { this.isCoolingDown = false; }, 2000);
             return;
         }
 
         this.isPlaying = true;
+        if (this.onSpeakingStart) this.onSpeakingStart();
 
-        if (this.onSpeakingStart) {
-            this.onSpeakingStart();
-        }
-
-        this.initAudioContext();
-
-        if (this.audioContext.state === 'suspended') {
+        // iOS requiere resume() antes de cada reproducción
+        if (this.audioContext.state === 'suspended' || this.audioContext.state === 'interrupted') {
             await this.audioContext.resume();
         }
 
         const buffer = this.audioQueue.shift();
-        const audioBuffer = await this.audioContext.decodeAudioData(buffer);
-        
+
+        // iOS a veces falla con Promise, usar callback como fallback
+        const decode = () => new Promise((resolve, reject) => {
+            this.audioContext.decodeAudioData(buffer.slice(0), resolve, reject);
+        });
+
+        let audioBuffer;
+        try {
+            audioBuffer = await decode();
+        } catch (e) {
+            console.error('decodeAudioData failed:', e);
+            this.playNext();
+            return;
+        }
+
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
-        
+
         const gainNode = this.audioContext.createGain();
         gainNode.gain.value = 1.0;
-        
         source.connect(gainNode);
         gainNode.connect(this.analyser);
-        
-        source.onended = () => {
-            this.playNext();
-        };
-        
-        source.start();
+
+        source.onended = () => { this.playNext(); };
+        source.start(0);
         this.animateReactor();
     }
 

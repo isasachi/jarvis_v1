@@ -714,9 +714,12 @@
 
         function startCall() {
             if (!speechRecognizer.isAvailable()) {
-                alert('Navegador no soportado. Usa Chrome.');
+                alert('En iPhone usa Safari. En desktop usa Chrome o Edge.');
                 return;
             }
+            // Crear AudioContext aquí, dentro del gesto del usuario
+            if (jarvisSocket) jarvisSocket.initAudioContext();
+
             callActive = true;
             typewriterQueue = [];
             isTyping = false;
