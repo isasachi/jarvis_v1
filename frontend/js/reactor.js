@@ -4,10 +4,9 @@ class ArcReactor {
         this.audioLevel = 0;
         this.state = 'idle';
         this.time = 0;
-        this.baseRadius = 1.0;
         
         this.init();
-        this.createOrb();
+        this.createReactor();
         this.animate();
     }
 
@@ -20,130 +19,185 @@ class ArcReactor {
             0.1,
             1000
         );
-        this.camera.position.z = 5;
+        this.camera.position.z = 4;
 
         this.renderer = new THREE.WebGLRenderer({ 
             antialias: true, 
             alpha: true 
         });
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.container.appendChild(this.renderer.domElement);
-
-        const ambientLight = new THREE.AmbientLight(0x111122, 0.3);
-        this.scene.add(ambientLight);
 
         this.pointLight = new THREE.PointLight(0x00d4ff, 2, 15);
         this.pointLight.position.set(0, 0, 2);
         this.scene.add(this.pointLight);
 
-        const dirLight = new THREE.DirectionalLight(0x00ffff, 0.4);
-        dirLight.position.set(5, 5, 5);
-        this.scene.add(dirLight);
+        const ambientLight = new THREE.AmbientLight(0x001122, 0.5);
+        this.scene.add(ambientLight);
 
         window.addEventListener('resize', () => this.onResize());
     }
 
-    createOrb() {
+    createReactor() {
         this.createCore();
-        this.createOuterLayer();
-        this.createGlow();
+        this.createOuterRing();
+        this.createMiddleRings();
+        this.createGlowSphere();
         this.createParticles();
     }
 
     createCore() {
-        const geometry = new THREE.IcosahedronGeometry(0.4, 4);
+        const geometry = new THREE.SphereGeometry(0.3, 32, 32);
         
-        this.coreMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ffff,
-            emissive: 0x00d4ff,
-            emissiveIntensity: 0.8,
-            metalness: 0.3,
-            roughness: 0.2,
+        this.coreMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
             transparent: true,
-            opacity: 0.9
+            opacity: 1
         });
 
         this.core = new THREE.Mesh(geometry, this.coreMaterial);
-        this.core.userData.originalPositions = geometry.attributes.position.array.slice();
         this.scene.add(this.core);
-    }
 
-    createOuterLayer() {
-        const geometry = new THREE.IcosahedronGeometry(1.0, 5);
-        
-        this.outerMaterial = new THREE.MeshStandardMaterial({
+        const innerGlowGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+        const innerGlowMaterial = new THREE.MeshBasicMaterial({
             color: 0x00d4ff,
-            emissive: 0x004466,
-            emissiveIntensity: 0.3,
-            metalness: 0.1,
-            roughness: 0.8,
             transparent: true,
-            opacity: 0.4,
-            wireframe: false
+            opacity: 0.5,
+            side: THREE.BackSide
         });
-
-        this.outerLayer = new THREE.Mesh(geometry, this.outerMaterial);
-        this.outerLayer.userData.originalPositions = geometry.attributes.position.array.slice();
-        this.scene.add(this.outerLayer);
+        this.innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
+        this.scene.add(this.innerGlow);
     }
 
-    createGlow() {
-        const glowGeometry = new THREE.SphereGeometry(1.2, 32, 32);
+    createOuterRing() {
+        const outerGeometry = new THREE.TorusGeometry(1.0, 0.08, 16, 100);
+        const outerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00d4ff,
+            transparent: true,
+            opacity: 0.9
+        });
+        
+        this.outerRing = new THREE.Mesh(outerGeometry, outerMaterial);
+        this.scene.add(this.outerRing);
+
+        const outerGlowGeometry = new THREE.TorusGeometry(1.0, 0.2, 16, 100);
+        const outerGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00d4ff,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.BackSide
+        });
+        this.outerRingGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+        this.scene.add(this.outerRingGlow);
+
+        this.createRingSpikes(this.outerRing, 12);
+    }
+
+    createRingSpikes(ring, count) {
+        const spikeGroup = new THREE.Group();
+        
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            
+            const spikeGeometry = new THREE.ConeGeometry(0.06, 0.25, 8);
+            const spikeMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00d4ff,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+            spike.position.x = Math.cos(angle) * 1.0;
+            spike.position.y = Math.sin(angle) * 1.0;
+            spike.rotation.z = angle + Math.PI / 2;
+            
+            spikeGroup.add(spike);
+        }
+        
+        this.scene.add(spikeGroup);
+        this.ringSpikes = spikeGroup;
+    }
+
+    createMiddleRings() {
+        this.middleRings = [];
+        
+        const ringConfigs = [
+            { radius: 0.7, tube: 0.04, speed: 1.2, tilt: 0 },
+            { radius: 0.5, tube: 0.03, speed: -0.8, tilt: Math.PI / 4 },
+            { radius: 0.35, tube: 0.025, speed: 0.6, tilt: -Math.PI / 6 }
+        ];
+
+        ringConfigs.forEach((config, index) => {
+            const geometry = new THREE.TorusGeometry(config.radius, config.tube, 16, 64);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x00d4ff,
+                transparent: true,
+                opacity: 0.7 - index * 0.15
+            });
+            
+            const ring = new THREE.Mesh(geometry, material);
+            ring.rotation.x = Math.PI / 2;
+            ring.rotation.y = config.tilt;
+            ring.userData = { speed: config.speed, tilt: config.tilt };
+            
+            this.middleRings.push(ring);
+            this.scene.add(ring);
+        });
+    }
+
+    createGlowSphere() {
+        const glowGeometry = new THREE.SphereGeometry(1.4, 32, 32);
         const glowMaterial = new THREE.MeshBasicMaterial({
             color: 0x00d4ff,
             transparent: true,
-            opacity: 0.15,
+            opacity: 0.1,
             side: THREE.BackSide
         });
         
-        this.glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        this.scene.add(this.glow);
+        this.glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
+        this.scene.add(this.glowSphere);
     }
 
     createParticles() {
-        const particleCount = 150;
+        const particleCount = 200;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
         const colors = new Float32Array(particleCount * 3);
-        const sizes = new Float32Array(particleCount);
+        
         this.particleData = [];
 
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
-            const radius = 1.8 + Math.random() * 1.2;
-            const height = (Math.random() - 0.5) * 2;
+            const radius = 0.8 + Math.random() * 0.8;
+            const height = (Math.random() - 0.5) * 0.3;
             
             positions[i * 3] = Math.cos(angle) * radius;
             positions[i * 3 + 1] = height;
             positions[i * 3 + 2] = Math.sin(angle) * radius;
 
             colors[i * 3] = 0;
-            colors[i * 3 + 1] = 0.83 + Math.random() * 0.17;
+            colors[i * 3 + 1] = 0.83;
             colors[i * 3 + 2] = 1;
-
-            sizes[i] = 0.02 + Math.random() * 0.03;
 
             this.particleData.push({
                 angle: angle,
                 radius: radius,
                 height: height,
-                speed: 0.2 + Math.random() * 0.5,
-                orbitSpeed: 0.1 + Math.random() * 0.3
+                speed: 0.5 + Math.random() * 1,
+                offset: Math.random() * Math.PI * 2
             });
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
         const material = new THREE.PointsMaterial({
-            size: 0.04,
+            size: 0.03,
             vertexColors: true,
             transparent: true,
-            opacity: 0.7,
-            blending: THREE.AdditiveBlending,
-            sizeAttenuation: true
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
         });
 
         this.particles = new THREE.Points(geometry, material);
@@ -158,91 +212,48 @@ class ArcReactor {
         this.state = newState;
     }
 
-    deformGeometry(mesh, time, intensity) {
-        const positions = mesh.geometry.attributes.position.array;
-        const original = mesh.userData.originalPositions;
-        
-        if (!original) return;
-
-        for (let i = 0; i < positions.length; i += 3) {
-            const x = original[i];
-            const y = original[i + 1];
-            const z = original[i + 2];
-            
-            const noise = Math.sin(x * 3 + time) * Math.cos(y * 3 + time * 0.7) * Math.sin(z * 3 + time * 0.5);
-            const noise2 = Math.sin(x * 5 + time * 1.3) * Math.cos(y * 4 + time) * 0.3;
-            
-            const deform = (noise + noise2) * intensity;
-            
-            const length = Math.sqrt(x * x + y * y + z * z);
-            const scale = 1 + deform;
-            
-            positions[i] = x * scale;
-            positions[i + 1] = y * scale;
-            positions[i + 2] = z * scale;
-        }
-        
-        mesh.geometry.attributes.position.needsUpdate = true;
-        mesh.geometry.computeVertexNormals();
-    }
-
     updateColors() {
-        let baseColor, emissiveColor, emissiveIntensity;
-        let glowColor, particleColor;
+        let baseColor, emissiveColor;
 
         switch (this.state) {
             case 'listening':
-                baseColor = 0x00ff88;
+                baseColor = new THREE.Color(0x00ff88);
                 emissiveColor = 0x00ff88;
-                emissiveIntensity = 0.8;
-                glowColor = 0x00ff88;
                 break;
             case 'processing':
-                baseColor = 0x0088ff;
-                emissiveColor = 0x4400ff;
-                emissiveIntensity = 0.9;
-                glowColor = 0x4400ff;
+                baseColor = new THREE.Color(0xff6b00);
+                emissiveColor = 0xff6b00;
                 break;
             case 'speaking':
-                baseColor = 0x00d4ff;
+                baseColor = new THREE.Color(0x00d4ff);
                 emissiveColor = 0x00d4ff;
-                emissiveIntensity = 1.0;
-                glowColor = 0x00d4ff;
                 break;
             default:
-                baseColor = 0x008899;
-                emissiveColor = 0x003344;
-                emissiveIntensity = 0.4;
-                glowColor = 0x003344;
+                baseColor = new THREE.Color(0x00d4ff);
+                emissiveColor = 0x00d4ff;
         }
 
-        const targetCoreColor = new THREE.Color(baseColor);
-        const targetEmissive = new THREE.Color(emissiveColor);
+        this.coreMaterial.color.lerp(baseColor, 0.15);
+        this.innerGlow.material.color.lerp(baseColor, 0.15);
         
-        this.coreMaterial.color.lerp(targetCoreColor, 0.1);
-        this.coreMaterial.emissive.lerp(targetEmissive, 0.1);
-        this.coreMaterial.emissiveIntensity = THREE.MathUtils.lerp(
-            this.coreMaterial.emissiveIntensity, 
-            emissiveIntensity * (1 + this.audioLevel * 0.5), 
-            0.1
-        );
-
-        this.outerMaterial.color.lerp(targetCoreColor, 0.1);
-        this.outerMaterial.emissive.lerp(targetEmissive, 0.1);
-
-        this.glow.material.color.lerp(new THREE.Color(glowColor), 0.1);
+        this.outerRing.material.color.lerp(baseColor, 0.15);
+        this.outerRingGlow.material.color.lerp(baseColor, 0.15);
         
-        this.pointLight.color.lerp(targetCoreColor, 0.1);
-
-        const positions = this.particles.geometry.attributes.position.array;
-        const colors = this.particles.geometry.attributes.color.array;
-        
-        for (let i = 0; i < positions.length / 3; i++) {
-            colors[i * 3] = colors[i * 3] * 0.95 + targetCoreColor.r * 0.05;
-            colors[i * 3 + 1] = colors[i * 3 + 1] * 0.95 + targetCoreColor.g * 0.05;
-            colors[i * 3 + 2] = colors[i * 3 + 2] * 0.95 + targetCoreColor.b * 0.05;
+        if (this.ringSpikes) {
+            this.ringSpikes.children.forEach(spike => {
+                spike.material.color.lerp(baseColor, 0.15);
+            });
         }
-        this.particles.geometry.attributes.color.needsUpdate = true;
+
+        this.middleRings.forEach(ring => {
+            ring.material.color.lerp(baseColor, 0.15);
+        });
+
+        this.glowSphere.material.color.lerp(baseColor, 0.15);
+        this.pointLight.color.lerp(baseColor, 0.15);
+        
+        const intensity = 1.5 + this.audioLevel * 2;
+        this.pointLight.intensity = intensity;
     }
 
     animate() {
@@ -250,91 +261,101 @@ class ArcReactor {
 
         this.time += 0.016;
 
-        let coreIntensity, outerIntensity, particleSpeed, pulseSpeed;
+        let pulseSpeed, rotationSpeed, particleSpeed;
         
         switch (this.state) {
             case 'idle':
-                coreIntensity = 0.15;
-                outerIntensity = 0.1;
-                particleSpeed = 0.3;
                 pulseSpeed = 0.5;
+                rotationSpeed = 0.3;
+                particleSpeed = 0.3;
                 break;
             case 'listening':
-                coreIntensity = 0.3 + this.audioLevel * 0.4;
-                outerIntensity = 0.25 + this.audioLevel * 0.3;
-                particleSpeed = 0.8 + this.audioLevel * 0.5;
                 pulseSpeed = 1.5;
+                rotationSpeed = 0.8;
+                particleSpeed = 0.8;
                 break;
             case 'processing':
-                coreIntensity = 0.4;
-                outerIntensity = 0.35;
-                particleSpeed = 1.2;
                 pulseSpeed = 3.0;
+                rotationSpeed = 1.5;
+                particleSpeed = 1.5;
                 break;
             case 'speaking':
-                coreIntensity = 0.35 + this.audioLevel * 0.5;
-                outerIntensity = 0.3 + this.audioLevel * 0.4;
-                particleSpeed = 1.0 + this.audioLevel * 0.8;
                 pulseSpeed = 2.0;
+                rotationSpeed = 1.0;
+                particleSpeed = 1.0;
                 break;
             default:
-                coreIntensity = 0.15;
-                outerIntensity = 0.1;
-                particleSpeed = 0.3;
                 pulseSpeed = 0.5;
+                rotationSpeed = 0.3;
+                particleSpeed = 0.3;
         }
 
-        const pulse = Math.sin(this.time * pulseSpeed) * 0.1;
-        
-        this.deformGeometry(this.core, this.time, coreIntensity + pulse);
-        this.deformGeometry(this.outerLayer, this.time * 0.7, outerIntensity);
+        const pulse = Math.sin(this.time * pulseSpeed);
+        const audioPulse = this.audioLevel * 0.3;
 
-        const coreScale = 1 + pulse * 0.2 + this.audioLevel * 0.2;
+        const coreScale = 1 + pulse * 0.1 + audioPulse;
         this.core.scale.setScalar(coreScale);
-        
-        const outerScale = 1 + pulse * 0.1 + this.audioLevel * 0.15;
-        this.outerLayer.scale.setScalar(outerScale);
+        this.innerGlow.scale.setScalar(coreScale * 1.2);
 
-        this.core.rotation.y += 0.005;
-        this.core.rotation.x += 0.003;
+        this.outerRing.rotation.z += 0.005 * rotationSpeed;
+        this.outerRingGlow.rotation.z += 0.005 * rotationSpeed;
         
-        this.outerLayer.rotation.y -= 0.003;
-        this.outerLayer.rotation.z += 0.002;
+        const outerRingPulse = 1 + pulse * 0.05 + audioPulse;
+        this.outerRing.scale.setScalar(outerRingPulse);
+        this.outerRingGlow.scale.setScalar(outerRingPulse);
 
-        const glowScale = 1.2 + pulse * 0.1 + this.audioLevel * 0.3;
-        this.glow.scale.setScalar(glowScale);
-        this.glow.material.opacity = 0.1 + this.audioLevel * 0.15 + pulse * 0.05;
+        if (this.ringSpikes) {
+            this.ringSpikes.rotation.z += 0.005 * rotationSpeed;
+        }
+
+        this.middleRings.forEach((ring, i) => {
+            const data = ring.userData;
+            ring.rotation.z += data.speed * 0.01 * rotationSpeed;
+            ring.rotation.x = Math.PI / 2 + Math.sin(this.time + i) * 0.1;
+        });
 
         this.updateParticles(particleSpeed);
 
-        const baseIntensity = 1.5;
-        const audioBoost = this.audioLevel * 4;
-        this.pointLight.intensity = baseIntensity + audioBoost;
-
-        this.updateColors();
+        const glowScale = 1 + pulse * 0.08 + audioPulse;
+        this.glowSphere.scale.setScalar(glowScale);
+        this.glowSphere.material.opacity = 0.08 + this.audioLevel * 0.12;
 
         this.renderer.render(this.scene, this.camera);
     }
 
     updateParticles(speed) {
         const positions = this.particles.geometry.attributes.position.array;
+        const colors = this.particles.geometry.attributes.color.array;
         
+        let baseColor;
+        switch (this.state) {
+            case 'listening': baseColor = { r: 0, g: 1, b: 0.53 }; break;
+            case 'processing': baseColor = { r: 1, g: 0.42, b: 0 }; break;
+            case 'speaking': baseColor = { r: 0, g: 0.83, b: 1 }; break;
+            default: baseColor = { r: 0, g: 0.83, b: 1 };
+        }
+
         for (let i = 0; i < this.particleData.length; i++) {
             const p = this.particleData[i];
             
-            p.angle += p.orbitSpeed * speed * 0.02;
+            p.angle += p.speed * speed * 0.02;
             
-            const radiusVariation = Math.sin(this.time * p.speed) * 0.2;
-            const radius = p.radius + radiusVariation;
+            const radiusPulse = Math.sin(this.time * 2 + p.offset) * 0.15 * (1 + this.audioLevel);
+            const radius = p.radius + radiusPulse;
             
             positions[i * 3] = Math.cos(p.angle) * radius;
             positions[i * 3 + 2] = Math.sin(p.angle) * radius;
-            positions[i * 3 + 1] = p.height + Math.sin(this.time * p.speed * 2) * 0.2;
+            positions[i * 3 + 1] = p.height + Math.sin(this.time * 3 + p.offset) * 0.1;
+
+            colors[i * 3] = colors[i * 3] * 0.95 + baseColor.r * 0.05;
+            colors[i * 3 + 1] = colors[i * 3 + 1] * 0.95 + baseColor.g * 0.05;
+            colors[i * 3 + 2] = colors[i * 3 + 2] * 0.95 + baseColor.b * 0.05;
         }
         
         this.particles.geometry.attributes.position.needsUpdate = true;
+        this.particles.geometry.attributes.color.needsUpdate = true;
         
-        this.particles.rotation.y += 0.001 * speed;
+        this.particles.rotation.y += 0.002 * speed;
     }
 
     onResize() {
